@@ -1,80 +1,45 @@
-#include <Arduino.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <LiquidCrystal_I2C.h>
-#include <Wire.h>
+#include <Wire.h>                   // Library untuk komunikasi I2C
+#include <LiquidCrystal_I2C.h>      // Library untuk LCD I2C
 
-// Inisialisasi objek LCD dengan alamat I2C dan ukuran 16x2
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+#define SENSOR_PIN 34               // Pin ADC yang digunakan untuk sensor kelembapan tanah
+#define RELAY_PIN 23                // Pin digital yang digunakan untuk relay
+#define THRESHOLD 3000              // Nilai ambang batas untuk menentukan tanah kering (sesuaikan jika perlu)
 
-// Konfigurasi pin untuk sensor suhu DS18B20
-const int oneWireBus = 13;  // Pin GPIO untuk sensor suhu
-
-// Inisialisasi OneWire dan DallasTemperature
-OneWire oneWire(oneWireBus);
-DallasTemperature sensor(&oneWire);
-
-// Pin untuk relay
-const int relayPin = 18;  // Pin GPIO untuk relay
-
-// Pin untuk sensor kelembaban
-#define sensorPin  26  // Pin GPIO untuk sensor kelembaban
+// Inisialisasi LCD dengan alamat I2C (0x27 atau 0x3F, tergantung modul Anda) dan ukuran layar
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Ganti 0x27 dengan alamat I2C dari LCD Anda jika berbeda
 
 void setup() {
-  // Inisialisasi komunikasi serial
-  Serial.begin(9600);
-
+  Serial.begin(115200);            // Mulai komunikasi serial
+  lcd.init();                      // Inisialisasi LCD
+  lcd.backlight();                // Nyalakan lampu latar LCD
+  lcd.setCursor(0, 0);            // Set posisi kursor ke baris pertama
+  lcd.print("Soil Moisture:");    // Tampilkan pesan awal
   
-
-  // Inisialisasi LCD
-  Wire.begin(21, 22); // Atur pin SDA dan SCL untuk LCD I2C
-  lcd.init();
-  lcd.backlight(); // Nyalakan backlight LCD
-  lcd.setCursor(0, 0);
-  lcd.print("Suhu Air:");
-
-  // Inisialisasi pin relay sebagai output
-  pinMode(relayPin, OUTPUT);
-
-  // Inisialisasi sensor suhu DS18B20
-  sensor.begin();
-  pinMode(oneWireBus, INPUT);
-
-  // Inisialisasi pin sensor kelembaban sebagai input
-  pinMode(sensorPin, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);     // Set pin relay sebagai output
+  digitalWrite(RELAY_PIN, LOW);   // Pastikan relay mati saat startup
 }
 
 void loop() {
-  // Mendapatkan suhu dari sensor DS18B20
-  sensor.requestTemperatures();
-  float temperatureC = sensor.getTempCByIndex(0);
+  int sensorValue = analogRead(SENSOR_PIN);   // Baca nilai dari sensor
+  Serial.print("Raw Sensor Value: ");
+  Serial.println(sensorValue);
 
-  // Periksa apakah suhu valid
-  if (temperatureC == -127.0) {
-    Serial.println("Gagal membaca suhu");
-    return;
-  }
+  // Update LCD dengan nilai sensor dan status relay
+  lcd.setCursor(0, 1);  // Set posisi kursor ke baris kedua
+  lcd.print("Value: ");
+  lcd.print(sensorValue);
+  lcd.print("  "); // Tambahkan spasi untuk menghapus nilai lama
 
-  // Tampilkan suhu di Serial Monitor
-  Serial.print("Suhu Air: ");
-  Serial.print(temperatureC);
-  Serial.println(" °C");
-
-  // Tampilkan suhu di LCD
-  lcd.setCursor(0, 1);
-  lcd.print("Temp: ");
-  lcd.print(temperatureC);
-  lcd.print(" C");
-
-  // Kontrol relay berdasarkan suhu
-  if (temperatureC >= 25.0) {
-    digitalWrite(relayPin, HIGH); // Aktifkan relay jika suhu >= 25°C
-    Serial.println("Relay ON");
+  // Aktifkan relay jika tanah kering (nilai sensor > ambang batas)
+  if (sensorValue > THRESHOLD) {
+    digitalWrite(RELAY_PIN, LOW);   // Matikan relay (perbaiki logika jika relay aktif LOW)
+    lcd.setCursor(0, 0); // Pindahkan kursor ke baris pertama
+    lcd.print("Relay: OFF  "); // Tampilkan status relay
   } else {
-    digitalWrite(relayPin, LOW); // Matikan relay jika suhu < 25°C
-    Serial.println("Relay OFF");
+    digitalWrite(RELAY_PIN, HIGH);  // Nyalakan relay (perbaiki logika jika relay aktif HIGH)
+    lcd.setCursor(0, 0); // Pindahkan kursor ke baris pertama
+    lcd.print("Relay: ON   "); // Tampilkan status relay
   }
 
-  // Tunda 1 detik sebelum membaca suhu lagi
-  delay(1000);
+  delay(1000);  // Tunggu 1 detik sebelum membaca lagi
 }
